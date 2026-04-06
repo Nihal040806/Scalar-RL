@@ -1,0 +1,38 @@
+{
+  "scenario_id": "hard_001",
+  "task_name": "full_outage",
+  "difficulty": "hard",
+  "description": "Full outage: LB misconfigured (max_conn=5), payment OOM (99%), stale DNS",
+  "initial_alerts": [
+    "P0 CRITICAL: lb-prod - Health checks failing, max_connections=5",
+    "P1 CRITICAL: payment-service - Memory at 99%, OOMKilled",
+    "P1 WARNING: dns - Stale cache entries"
+  ],
+  "initial_system_status": {
+    "lb-prod": "down",
+    "payment-service": "down",
+    "dns": "degraded",
+    "api-gateway": "degraded",
+    "database": "healthy"
+  },
+  "root_causes": {
+    "lb-prod": {
+      "type": "misconfigured_max_connections",
+      "severity": "P0"
+    },
+    "payment-service": {
+      "type": "memory_leak",
+      "severity": "P1"
+    },
+    "dns": {
+      "type": "stale_cache",
+      "severity": "P1"
+    }
+  },
+  "correct_fix_order": [
+    "lb-prod",
+    "payment-service",
+    "dns"
+  ],
+  "max_steps": 30
+}

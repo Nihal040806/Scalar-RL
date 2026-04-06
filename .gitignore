@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Pytest
+.pytest_cache/
+
+# Zips and archives
+*.zip
+*.tar.gz
+*.rar
+
+# macOS
+.DS_Store

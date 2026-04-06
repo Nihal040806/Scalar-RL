@@ -1,0 +1,20 @@
+{
+  "scenario_id": "easy_002",
+  "task_name": "log_detective",
+  "difficulty": "easy",
+  "description": "auth-service returning 500 errors after deploy v1.1.5",
+  "initial_alerts": [
+    "CRITICAL: auth-service 500 error rate at 57% (threshold: 1%)",
+    "WARNING: Downstream failures increasing"
+  ],
+  "initial_system_status": {
+    "auth-service": "degraded",
+    "database": "healthy",
+    "cache": "healthy"
+  },
+  "root_cause": "bad_deploy",
+  "root_cause_service": "auth-service",
+  "correct_fix_action": "rollback_deploy",
+  "correct_rollback_version": "v1.3.4",
+  "max_steps": 15
+}

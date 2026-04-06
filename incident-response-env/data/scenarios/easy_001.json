@@ -1,0 +1,20 @@
+{
+  "scenario_id": "easy_001",
+  "task_name": "log_detective",
+  "difficulty": "easy",
+  "description": "api-gateway returning 500 errors after deploy v4.8.8",
+  "initial_alerts": [
+    "CRITICAL: api-gateway 500 error rate at 20% (threshold: 1%)",
+    "WARNING: Downstream failures increasing"
+  ],
+  "initial_system_status": {
+    "api-gateway": "degraded",
+    "database": "healthy",
+    "cache": "healthy"
+  },
+  "root_cause": "bad_deploy",
+  "root_cause_service": "api-gateway",
+  "correct_fix_action": "rollback_deploy",
+  "correct_rollback_version": "v4.2.2",
+  "max_steps": 15
+}

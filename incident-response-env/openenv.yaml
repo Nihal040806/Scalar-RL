@@ -1,0 +1,82 @@
+name: incident-response-env
+version: 1.0.0
+description: >
+  A production incident response simulation environment.
+  An AI agent acts as an on-call SRE engineer, receiving real-time
+  alerts, reading logs and metrics, diagnosing root causes, and
+  applying fixes in the correct order to restore system health.
+author: your-huggingface-username
+tags:
+  - openenv
+  - devops
+  - incident-response
+  - site-reliability
+  - real-world
+
+tasks:
+  - name: log_detective
+    difficulty: easy
+    max_steps: 15
+    description: >
+      A web server returns 500 errors after a recent deployment.
+      Agent must read logs, identify the faulty service, and rollback.
+    expected_score_random: 0.15
+    expected_score_baseline: 0.72
+
+  - name: cascade_finder
+    difficulty: medium
+    max_steps: 20
+    description: >
+      A database connection pool exhaustion causes cascading failures
+      across 3 microservices. Agent must trace to root cause, fix
+      configuration, and verify downstream recovery. Order matters.
+    expected_score_random: 0.08
+    expected_score_baseline: 0.58
+
+  - name: full_outage
+    difficulty: hard
+    max_steps: 30
+    description: >
+      Full production outage caused by 3 simultaneous interacting issues:
+      misconfigured load balancer (P0), memory leak (P1), stale DNS (P1).
+      Agent must triage by severity and fix in dependency order.
+    expected_score_random: 0.03
+    expected_score_baseline: 0.34
+
+observation_space:
+  type: object
+  fields:
+    - name: alerts
+      type: array[string]
+      description: Active system alerts
+    - name: system_status
+      type: object
+      description: Map of service_name to health status
+    - name: last_action_result
+      type: string
+      description: Output from the last action taken
+    - name: steps_taken
+      type: integer
+    - name: max_steps
+      type: integer
+
+action_space:
+  type: discrete_structured
+  actions:
+    - read_logs
+    - check_metrics
+    - check_config
+    - restart_service
+    - rollback_deploy
+    - update_config
+    - flush_cache
+    - run_healthcheck
+    - close_incident
+
+reward:
+  range: [0.0, 1.0]
+  type: dense
+  description: >
+    Partial credit awarded at every meaningful diagnostic or fix step.
+    Rewards correct identification of root cause, correct fix actions,
+    correct ordering, verification via healthcheck, and proper close.
