@@ -1,3 +1,4 @@
+import gradio as gr
 from fastapi import FastAPI, HTTPException
 from typing import Dict, Any
 from pydantic import BaseModel
@@ -83,3 +84,21 @@ def state(task_name: str = "log_detective") -> Dict[str, Any]:
 def list_tasks() -> Dict[str, Any]:
     """Returns the available scenarios supported by this backend."""
     return {"tasks": TASK_METADATA}
+
+# --- Gradio UI for Hugging Face Space visibility ---
+def demo_reset(task_name):
+    env = IncidentResponseEnv(task_name)
+    obs = env.reset()
+    return json.dumps(obs.model_dump(), indent=2)
+
+import json # needed for indentation in UI
+demo = gr.Interface(
+    fn=demo_reset,
+    inputs=gr.Dropdown(["log_detective", "cascade_finder", "full_outage"], value="log_detective", label="Select Scenario"),
+    outputs=gr.Code(label="Initial Observation JSON", language="json"),
+    title="🚨 Incident Response OpenEnv",
+    description="Select a production incident task below to see the starting alerts and system state. This UI interacts with the same backend API used for the Hackathon evaluation."
+)
+
+# Mount Gradio to the FastAPI root
+app = gr.mount_gradio_app(app, demo, path="/")

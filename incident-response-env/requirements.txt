@@ -5,3 +5,4 @@ openai>=1.14.0
 pyyaml>=6.0.1
 pytest>=8.1.0
 httpx>=0.27.0
+gradio>=4.20.0
