@@ -22,7 +22,8 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 BENCHMARK = "incident-response-env"
 
 if HF_TOKEN is None:
-    raise ValueError("HF_TOKEN environment variable is required")
+    print("WARNING: HF_TOKEN not found. Baseline evaluation may fail if model requires authentication.", flush=True)
+    HF_TOKEN = "dummy_token"  # fallback to avoid immediate crash if user wants to test local environment only
 
 client = OpenAI(
     base_url=API_BASE_URL,
@@ -66,7 +67,8 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    # MANDATORY FORMAT: [END] success= steps= rewards=
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
 def call_llm(messages: list, max_retries: int = 3) -> str:
@@ -154,8 +156,8 @@ def run_episode(task_name: str) -> float:
 
         log_step(step=steps_taken, action=action_str, reward=step_reward, done=done, error=action_error)
 
-        # Rate-limit pause (free tier = 5 RPM)
-        time.sleep(15)
+        # Rate-limit pause (reduced to 12s for faster audit completion)
+        time.sleep(12)
 
     success = score > 0.1
     log_end(success=success, steps=steps_taken, score=score, rewards=rewards_list)

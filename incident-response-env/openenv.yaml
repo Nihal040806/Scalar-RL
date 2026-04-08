@@ -5,7 +5,7 @@ description: >
   An AI agent acts as an on-call SRE engineer, receiving real-time
   alerts, reading logs and metrics, diagnosing root causes, and
   applying fixes in the correct order to restore system health.
-author: your-huggingface-username
+author: NihalJoshi
 tags:
   - openenv
   - devops
