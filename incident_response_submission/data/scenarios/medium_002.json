@@ -1,0 +1,22 @@
+{
+  "scenario_id": "medium_002",
+  "task_name": "cascade_finder",
+  "difficulty": "medium",
+  "description": "Database connection pool exhausted at 150/150, cascading to payment-service, user-service",
+  "initial_alerts": [
+    "CRITICAL: payment-service - Cannot connect to database (timeout)",
+    "CRITICAL: user-service - Cannot connect to database (timeout)",
+    "WARNING: database - Connection pool utilization at 100%"
+  ],
+  "initial_system_status": {
+    "payment-service": "down",
+    "user-service": "down",
+    "database": "degraded",
+    "cache": "healthy"
+  },
+  "root_cause": "connection_pool_exhausted",
+  "root_cause_service": "database",
+  "correct_config_key": "max_connections",
+  "correct_config_value": 450,
+  "max_steps": 20
+}

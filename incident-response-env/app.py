@@ -1,7 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from models import Action, Observation, Reward
-from environment import IncidentResponseEnv
 from typing import Dict, Any
+from pydantic import BaseModel
+
+from models import Action, Observation, Reward
+from environment import IncidentResponseEnv, SCENARIOS, TASK_METADATA
+
+class StepResponse(BaseModel):
+    observation: Observation
+    reward: Reward
+    done: bool
+    info: Dict[str, Any]
 
 app = FastAPI(
     title="Incident Response OpenEnv",
@@ -9,47 +17,69 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Store active environments per task
+# Store active environments per task mapping task_name -> IncidentResponseEnv instance
 _envs: Dict[str, IncidentResponseEnv] = {}
 
 @app.get("/health")
-def health():
+def health() -> Dict[str, str]:
+    """Basic service health check."""
     return {"status": "ok", "environment": "incident-response-env"}
 
-@app.post("/reset")
-def reset(task_name: str = "log_detective") -> Dict[str, Any]:
-    if task_name not in ["log_detective", "cascade_finder", "full_outage"]:
-        raise HTTPException(status_code=400, detail=f"Unknown task: {task_name}")
+@app.post("/reset", response_model=Observation)
+def reset(task_name: str = "log_detective"):
+    """
+    Initializes or resets a specific task environment and returns the starting observation.
+    Must be called before /step to setup the environment state.
+    """
+    if task_name not in SCENARIOS:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Unknown task: '{task_name}'. Available tasks: {list(SCENARIOS.keys())}"
+        )
+        
     env = IncidentResponseEnv(task_name=task_name)
     _envs[task_name] = env
     obs = env.reset()
-    return obs.model_dump()
+    
+    return obs
 
-@app.post("/step")
-def step(action: Action, task_name: str = "log_detective") -> Dict[str, Any]:
+@app.post("/step", response_model=StepResponse)
+def step(action: Action, task_name: str = "log_detective"):
+    """
+    Processes an action against the actively loaded environment state.
+    Calculates dynamic rewards exactly aligned with Hackathon constraints.
+    """
     if task_name not in _envs:
-        raise HTTPException(status_code=400, detail="Call /reset first")
-    env = _envs[task_name]
-    obs, reward, done, info = env.step(action)
-    return {
-        "observation": obs.model_dump(),
-        "reward": reward.model_dump(),
-        "done": done,
-        "info": info
-    }
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Environment for '{task_name}' is not initialized. Call /reset first."
+        )
+        
+    try:
+        env = _envs[task_name]
+        obs, reward, done, info = env.step(action)
+    except ValueError as e:
+        # Reached when trying to step on a terminated episode natively
+        raise HTTPException(status_code=400, detail=str(e))
+        
+    return StepResponse(
+        observation=obs,
+        reward=reward,
+        done=done,
+        info=info
+    )
 
 @app.get("/state")
 def state(task_name: str = "log_detective") -> Dict[str, Any]:
+    """Returns the internal state variables without mutating the environment."""
     if task_name not in _envs:
-        raise HTTPException(status_code=400, detail="Call /reset first")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Environment for '{task_name}' is not initialized. Call /reset first."
+        )
     return _envs[task_name].state()
 
 @app.get("/tasks")
-def list_tasks():
-    return {
-        "tasks": [
-            {"name": "log_detective", "difficulty": "easy", "max_steps": 15},
-            {"name": "cascade_finder", "difficulty": "medium", "max_steps": 20},
-            {"name": "full_outage", "difficulty": "hard", "max_steps": 30}
-        ]
-    }
+def list_tasks() -> Dict[str, Any]:
+    """Returns the available scenarios supported by this backend."""
+    return {"tasks": TASK_METADATA}

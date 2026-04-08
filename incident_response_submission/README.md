@@ -1,14 +1,3 @@
----
-title: Incident Response Env
-emoji: 🚨
-colorFrom: blue
-colorTo: red
-sdk: docker
-app_file: app.py
-pinned: false
-tags:
-  - openenv
----
 # 🚨 Incident Response OpenEnv
 
 An OpenEnv environment where an AI agent plays the role of an

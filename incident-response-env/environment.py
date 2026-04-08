@@ -1,7 +1,6 @@
 import json
-import random
 from datetime import datetime, timezone
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
 from models import Action, Observation, Reward
 from tasks.task_easy import EASY_SCENARIO
@@ -9,7 +8,14 @@ from tasks.task_medium import MEDIUM_SCENARIO
 from tasks.task_hard import HARD_SCENARIO
 from graders.grader import grade_easy, grade_medium, grade_hard
 
-SCENARIOS = {
+# ─── CONSTANTS & METADATA ────────────────────────────────────────────────────────
+AVAILABLE_ACTIONS: List[str] = [
+    "read_logs", "check_metrics", "check_config",
+    "restart_service", "rollback_deploy", "update_config",
+    "flush_cache", "run_healthcheck", "close_incident"
+]
+
+SCENARIOS: Dict[str, Dict[str, Any]] = {
     "log_detective": EASY_SCENARIO,
     "cascade_finder": MEDIUM_SCENARIO,
     "full_outage": HARD_SCENARIO
@@ -21,65 +27,94 @@ GRADERS = {
     "full_outage": grade_hard
 }
 
+# Centralized metadata for use in both environment limits and FastAPI endpoints
+TASK_METADATA: List[Dict[str, Any]] = [
+    {"name": "log_detective", "difficulty": "easy", "max_steps": EASY_SCENARIO["max_steps"]},
+    {"name": "cascade_finder", "difficulty": "medium", "max_steps": MEDIUM_SCENARIO["max_steps"]},
+    {"name": "full_outage", "difficulty": "hard", "max_steps": HARD_SCENARIO["max_steps"]}
+]
+
+# ─── CORE ENVIRONMENT ────────────────────────────────────────────────────────────
+
 class IncidentResponseEnv:
-    def __init__(self, task_name: str = "log_detective"):
-        assert task_name in SCENARIOS, f"Unknown task: {task_name}. Choose from {list(SCENARIOS.keys())}"
-        self.task_name = task_name
-        self.scenario = SCENARIOS[task_name]
-        self.actions_taken = []
-        self.current_status = {}
-        self.step_count = 0
-        self.cumulative_score = 0.0
-        self.done = False
+    """
+    Main environment representing the mock infrastructure for the Hackathon.
+    Handles the state transitions, reward propagation, and action execution.
+    """
+    
+    def __init__(self, task_name: str = "log_detective") -> None:
+        if task_name not in SCENARIOS:
+            raise ValueError(f"Unknown task: {task_name}. Choose from {list(SCENARIOS.keys())}")
+            
+        self.task_name: str = task_name
+        self.scenario: Dict[str, Any] = SCENARIOS[task_name]
+        
+        # State tracking variables
+        self.actions_taken: List[Action] = []
+        self.current_status: Dict[str, str] = {}
+        self.step_count: int = 0
+        self.cumulative_score: float = 0.0
+        self.done: bool = False
 
     def reset(self) -> Observation:
-        self.actions_taken = []
+        """
+        Resets the environment to its initial mock state and returns the first observation.
+        """
+        self.actions_taken.clear()
         self.step_count = 0
         self.cumulative_score = 0.0
         self.done = False
-        self.current_status = self.scenario["initial_system_status"].copy()
+        self.current_status = dict(self.scenario["initial_system_status"])
 
         return Observation(
             timestamp=datetime.now(timezone.utc).isoformat(),
-            alerts=self.scenario["initial_alerts"],
+            alerts=list(self.scenario["initial_alerts"]),
             last_action_result="Incident opened. Begin investigation.",
-            system_status=self.current_status,
-            steps_taken=0,
+            system_status=dict(self.current_status),
+            steps_taken=self.step_count,
             max_steps=self.scenario["max_steps"],
-            available_actions=[
-                "read_logs", "check_metrics", "check_config",
-                "restart_service", "rollback_deploy", "update_config",
-                "flush_cache", "run_healthcheck", "close_incident"
-            ]
+            available_actions=list(AVAILABLE_ACTIONS)
         )
 
-    def step(self, action: Action) -> Tuple[Observation, Reward, bool, Dict]:
+    def step(self, action: Action) -> Tuple[Observation, Reward, bool, Dict[str, Any]]:
+        """
+        Processes an action taken by the AI agent, calculates rewards dynamically, 
+        and updates the underlying environment state.
+        
+        Args:
+            action (Action): The structured action chosen by the AI.
+            
+        Returns:
+            Tuple containing the new Observation, Reward instance, done flag, and info dict.
+        """
         if self.done:
-            raise ValueError("Episode is done. Call reset() first.")
+            raise ValueError("Episode is already done. Call reset() to start a new incident.")
 
         self.step_count += 1
         self.actions_taken.append(action)
 
-        # Execute action and get result string
-        result = self._execute_action(action)
+        # 1. Execute action securely and get result string
+        result_message: str = self._execute_action(action)
 
-        # Update system status based on correct fixes applied
+        # 2. Update the background infrastructure status if a correct fix is applied
         self._update_status(action)
 
-        # Calculate reward
+        # 3. Calculate dynamic dense reward matching Hackathon constraints
         grader_fn = GRADERS[self.task_name]
         score, breakdown = grader_fn(self.actions_taken, self.current_status)
-        step_reward = score - self.cumulative_score  # DENSE: reward for improvement this step
+        
+        # DENSE REWARD: award the incremental score gained in this specific step
+        step_reward: float = score - self.cumulative_score  
         self.cumulative_score = score
 
-        # Check done conditions
-        max_steps_reached = self.step_count >= self.scenario["max_steps"]
-        incident_closed = action.action_type == "close_incident"
+        # 4. Check terminal conditions
+        max_steps_reached: bool = self.step_count >= self.scenario["max_steps"]
+        incident_closed: bool = (action.action_type == "close_incident")
         self.done = max_steps_reached or incident_closed
 
         reward = Reward(
             score=round(max(0.0, step_reward), 3),
-            reason=result,
+            reason=result_message,
             partial_credit=breakdown,
             cumulative_score=round(self.cumulative_score, 3)
         )
@@ -87,97 +122,96 @@ class IncidentResponseEnv:
         obs = Observation(
             timestamp=datetime.now(timezone.utc).isoformat(),
             alerts=self._current_alerts(),
-            last_action_result=result,
-            system_status=self.current_status,
+            last_action_result=result_message,
+            system_status=dict(self.current_status),
             steps_taken=self.step_count,
             max_steps=self.scenario["max_steps"],
-            available_actions=["read_logs", "check_metrics", "check_config",
-                               "restart_service", "rollback_deploy", "update_config",
-                               "flush_cache", "run_healthcheck", "close_incident"]
+            available_actions=list(AVAILABLE_ACTIONS)
         )
 
-        return obs, reward, self.done, {
+        info_dict: Dict[str, Any] = {
             "steps_taken": self.step_count,
             "cumulative_score": self.cumulative_score,
             "breakdown": breakdown
         }
 
+        return obs, reward, self.done, info_dict
+
     def state(self) -> Dict[str, Any]:
+        """Provides a complete snapshot of the current environment state."""
         return {
             "task_name": self.task_name,
             "step_count": self.step_count,
-            "system_status": self.current_status,
+            "system_status": dict(self.current_status),
             "cumulative_score": self.cumulative_score,
             "done": self.done,
             "actions_taken_count": len(self.actions_taken)
         }
 
+    # ─── INTERNAL HELPERS ────────────────────────────────────────────────────────
+    
     def _execute_action(self, action: Action) -> str:
-        t = action.action_type
-        s = action.service or "unknown"
+        """
+        Maps an incoming AI action to the contextual response required by the task.
+        """
+        action_type = action.action_type
+        target_service = action.service or "unknown"
+        
+        # Dynamic execution map targeting specific handlers
+        action_map = {
+            "read_logs": lambda s: f"Logs for {s}:\n" + "\n".join(self.scenario.get("logs", {}).get(s, ["No logs found for this service."])),
+            "check_metrics": lambda s: f"Metrics for {s}: {json.dumps(self.scenario.get('metrics', {}).get(s, {'status': 'no data'}))}",
+            "check_config": lambda s: f"Config for {s}: {json.dumps(self.scenario.get('configs', {}).get(s, {'status': 'no config'}))}",
+            "restart_service": lambda s: f"Restarting {s}... Done. Service restarted successfully.",
+            "rollback_deploy": lambda s: f"Rolling back {s} to version {action.version or 'previous'}... Done.",
+            "update_config": lambda s: f"Updated config for {s}: {action.key} = {action.value}",
+            "flush_cache": lambda s: f"Flushing cache for {s}... Done. Cache cleared.",
+            "run_healthcheck": lambda s: self._perform_healthcheck(),
+            "close_incident": lambda s: "Incident closed. Final score will be calculated."
+        }
 
-        if t == "read_logs":
-            logs = self.scenario.get("logs", {}).get(s, ["No logs found for this service."])
-            return f"Logs for {s}:\n" + "\n".join(logs)
+        executor = action_map.get(action_type)
+        if executor:
+            return executor(target_service)
+        
+        return f"Unknown action: {action_type}"
 
-        elif t == "check_metrics":
-            metrics = self.scenario.get("metrics", {}).get(s, {"status": "no data"})
-            return f"Metrics for {s}: {json.dumps(metrics)}"
+    def _perform_healthcheck(self) -> str:
+        """Helper to generate healthcheck strings cleanly."""
+        healthy = [k for k, v in self.current_status.items() if v == "healthy"]
+        degraded = [k for k, v in self.current_status.items() if v != "healthy"]
+        return f"Health check complete. Healthy: {healthy}. Still degraded: {degraded}"
 
-        elif t == "check_config":
-            config = self.scenario.get("configs", {}).get(s, {"status": "no config"})
-            return f"Config for {s}: {json.dumps(config)}"
-
-        elif t == "restart_service":
-            return f"Restarting {s}... Done. Service restarted successfully."
-
-        elif t == "rollback_deploy":
-            version = action.version or "previous"
-            return f"Rolling back {s} to version {version}... Done."
-
-        elif t == "update_config":
-            return f"Updated config for {s}: {action.key} = {action.value}"
-
-        elif t == "flush_cache":
-            return f"Flushing cache for {s}... Done. Cache cleared."
-
-        elif t == "run_healthcheck":
-            healthy = [k for k, v in self.current_status.items() if v == "healthy"]
-            degraded = [k for k, v in self.current_status.items() if v != "healthy"]
-            return f"Health check complete. Healthy: {healthy}. Still degraded: {degraded}"
-
-        elif t == "close_incident":
-            return f"Incident closed. Final score will be calculated."
-
-        return f"Unknown action: {t}"
-
-    def _update_status(self, action: Action):
-        """Simulate system recovery when correct fixes are applied"""
-        sc = self.scenario
-        t = action.action_type
-        s = action.service
+    def _update_status(self, action: Action) -> None:
+        """
+        Simulate system recovery when correct fixes are applied based strictly on
+        the rules defined for each hardcoded hackathon scenario.
+        """
+        action_type = action.action_type
+        service = action.service
 
         if self.task_name == "log_detective":
-            if t == "rollback_deploy" and s == "api-gateway":
+            if action_type == "rollback_deploy" and service == "api-gateway":
                 self.current_status["api-gateway"] = "healthy"
 
         elif self.task_name == "cascade_finder":
-            if t == "restart_service" and s == "database":
+            if action_type == "restart_service" and service == "database":
                 self.current_status["database"] = "healthy"
                 self.current_status["user-service"] = "healthy"
                 self.current_status["order-service"] = "healthy"
                 self.current_status["api-gateway"] = "healthy"
 
         elif self.task_name == "full_outage":
-            if t == "update_config" and s == "lb-prod":
+            if action_type == "update_config" and service == "lb-prod":
                 self.current_status["lb-prod"] = "healthy"
-            if t == "rollback_deploy" and s == "payment-service":
+            if action_type == "rollback_deploy" and service == "payment-service":
                 self.current_status["payment-service"] = "healthy"
-            if t == "flush_cache" and s == "dns":
+            if action_type == "flush_cache" and service == "dns":
                 self.current_status["dns"] = "healthy"
 
-    def _current_alerts(self):
-        degraded = [k for k, v in self.current_status.items() if v != "healthy"]
-        if not degraded:
+    def _current_alerts(self) -> List[str]:
+        """Scans the current status and emits string alerts if components are degraded."""
+        degraded_services = [service for service, status in self.current_status.items() if status != "healthy"]
+        if not degraded_services:
             return ["All systems nominal. Ready to close incident."]
-        return [f"ALERT: {svc} is still {self.current_status[svc]}" for svc in degraded]
+        return [f"ALERT: {service} is still {self.current_status[service]}" for service in degraded_services]
