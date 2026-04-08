@@ -22,8 +22,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 BENCHMARK = "incident-response-env"
 
 if HF_TOKEN is None:
-    print("WARNING: HF_TOKEN not found. Baseline evaluation may fail if model requires authentication.", flush=True)
-    HF_TOKEN = "dummy_token"  # fallback to avoid immediate crash if user wants to test local environment only
+    print("WARNING: HF_TOKEN not found. Baseline evaluation will likely fail.", flush=True)
 
 client = OpenAI(
     base_url=API_BASE_URL,
