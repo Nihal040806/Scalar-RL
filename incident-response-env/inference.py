@@ -15,15 +15,18 @@ from openai import OpenAI
 from environment import IncidentResponseEnv
 from models import Action
 
-# ── Credentials (read from env vars, defaults to Gemini) ──
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY")
+# ── Credentials (read strictly from env vars defined by OpenEnv rules) ──
 API_BASE_URL = os.getenv("API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+HF_TOKEN = os.getenv("HF_TOKEN")
 BENCHMARK = "incident-response-env"
+
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
 
 client = OpenAI(
     base_url=API_BASE_URL,
-    api_key=API_KEY,
+    api_key=HF_TOKEN,
     timeout=60.0,  # 60s timeout so it never hangs
 )
 
