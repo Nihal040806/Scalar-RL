@@ -62,7 +62,7 @@ class IncidentResponseEnv:
         """
         self.actions_taken.clear()
         self.step_count = 0
-        self.cumulative_score = 0.0
+        self.cumulative_score = 0.01  # Must be strictly > 0.0
         self.done = False
         self.current_status = dict(self.scenario["initial_system_status"])
 
@@ -103,9 +103,13 @@ class IncidentResponseEnv:
         grader_fn = GRADERS[self.task_name]
         score, breakdown = grader_fn(self.actions_taken, self.current_status)
         
+        # HACKATHON RULE: Score must be strictly between 0 and 1 (not 0.0 or 1.0)
+        # Clamping to [0.01, 0.99] ensures we never hit the forbidden 0.0 or 1.0 boundaries.
+        clamped_score = max(0.01, min(0.99, score))
+        
         # DENSE REWARD: award the incremental score gained in this specific step
-        step_reward: float = score - self.cumulative_score  
-        self.cumulative_score = score
+        step_reward: float = clamped_score - self.cumulative_score  
+        self.cumulative_score = clamped_score
 
         # 4. Check terminal conditions
         max_steps_reached: bool = self.step_count >= self.scenario["max_steps"]
@@ -143,7 +147,7 @@ class IncidentResponseEnv:
             "task_name": self.task_name,
             "step_count": self.step_count,
             "system_status": dict(self.current_status),
-            "cumulative_score": self.cumulative_score,
+            "cumulative_score": max(0.01, min(0.99, self.cumulative_score)),
             "done": self.done,
             "actions_taken_count": len(self.actions_taken)
         }
