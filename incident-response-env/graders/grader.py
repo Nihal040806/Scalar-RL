@@ -1,6 +1,13 @@
 from typing import List, Tuple, Dict
 from models import Action
 
+
+def _clamp_score(score: float) -> float:
+    """Clamp score to strictly between 0 and 1 (exclusive).
+    Hackathon rule: each task score must satisfy 0 < score < 1."""
+    return round(max(0.01, min(0.99, score)), 3)
+
+
 def grade_easy(actions_taken: List[Action], final_status: Dict) -> Tuple[float, Dict]:
     """
     Grader for log_detective (easy task)
@@ -50,7 +57,7 @@ def grade_easy(actions_taken: List[Action], final_status: Dict) -> Tuple[float, 
         score += 0.10
         breakdown["closed_incident"] = 0.10
 
-    return round(min(score, 1.0), 3), breakdown
+    return _clamp_score(score), breakdown
 
 
 def grade_medium(actions_taken: List[Action], final_status: Dict) -> Tuple[float, Dict]:
@@ -106,7 +113,7 @@ def grade_medium(actions_taken: List[Action], final_status: Dict) -> Tuple[float
         score += 0.10
         breakdown["closed_incident"] = 0.10
 
-    return round(min(score, 1.0), 3), breakdown
+    return _clamp_score(score), breakdown
 
 
 def grade_hard(actions_taken: List[Action], final_status: Dict) -> Tuple[float, Dict]:
@@ -193,4 +200,4 @@ def grade_hard(actions_taken: List[Action], final_status: Dict) -> Tuple[float, 
         score += 0.10
         breakdown["closed_incident"] = 0.10
 
-    return round(min(score, 1.0), 3), breakdown
+    return _clamp_score(score), breakdown

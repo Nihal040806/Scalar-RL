@@ -29,13 +29,13 @@ class IncidentResponseEnv:
         self.actions_taken = []
         self.current_status = {}
         self.step_count = 0
-        self.cumulative_score = 0.0
+        self.cumulative_score = 0.01
         self.done = False
 
     def reset(self) -> Observation:
         self.actions_taken = []
         self.step_count = 0
-        self.cumulative_score = 0.0
+        self.cumulative_score = 0.01  # Must be strictly > 0.0
         self.done = False
         self.current_status = self.scenario["initial_system_status"].copy()
 
@@ -69,8 +69,10 @@ class IncidentResponseEnv:
         # Calculate reward
         grader_fn = GRADERS[self.task_name]
         score, breakdown = grader_fn(self.actions_taken, self.current_status)
-        step_reward = score - self.cumulative_score  # DENSE: reward for improvement this step
-        self.cumulative_score = score
+        # HACKATHON RULE: Score must be strictly between 0 and 1 (not 0.0 or 1.0)
+        clamped_score = max(0.01, min(0.99, score))
+        step_reward = clamped_score - self.cumulative_score  # DENSE: reward for improvement this step
+        self.cumulative_score = clamped_score
 
         # Check done conditions
         max_steps_reached = self.step_count >= self.scenario["max_steps"]
@@ -78,10 +80,10 @@ class IncidentResponseEnv:
         self.done = max_steps_reached or incident_closed
 
         reward = Reward(
-            score=round(max(0.0, step_reward), 3),
+            score=round(max(0.01, min(0.99, step_reward)), 3),
             reason=result,
             partial_credit=breakdown,
-            cumulative_score=round(self.cumulative_score, 3)
+            cumulative_score=round(max(0.01, min(0.99, self.cumulative_score)), 3)
         )
 
         obs = Observation(
@@ -107,7 +109,7 @@ class IncidentResponseEnv:
             "task_name": self.task_name,
             "step_count": self.step_count,
             "system_status": self.current_status,
-            "cumulative_score": self.cumulative_score,
+            "cumulative_score": max(0.01, min(0.99, self.cumulative_score)),
             "done": self.done,
             "actions_taken_count": len(self.actions_taken)
         }

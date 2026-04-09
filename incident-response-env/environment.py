@@ -117,10 +117,10 @@ class IncidentResponseEnv:
         self.done = max_steps_reached or incident_closed
 
         reward = Reward(
-            score=round(max(0.0, step_reward), 3),
+            score=round(max(0.01, min(0.99, step_reward)), 3),
             reason=result_message,
             partial_credit=breakdown,
-            cumulative_score=round(self.cumulative_score, 3)
+            cumulative_score=round(max(0.01, min(0.99, self.cumulative_score)), 3)
         )
 
         obs = Observation(
