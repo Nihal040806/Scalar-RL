@@ -74,7 +74,7 @@ action_space:
     - close_incident
 
 reward:
-  range: [0.0, 1.0]
+  range: [0.01, 0.99]
   type: dense
   description: >
     Partial credit awarded at every meaningful diagnostic or fix step.
